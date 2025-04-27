@@ -1,17 +1,48 @@
-import React from 'react';
-import { Link } from 'react-router-dom'; // Import Link for navigation
-import { motion } from 'framer-motion';
-import { Plus, Edit, Trash2, Package, DollarSign, Users, ShoppingBag, Download, AlertTriangle, Bell, ChevronLeft, ChevronRight, Search } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useStore } from '../store/useStore';
-import toast from 'react-hot-toast';
-import type { Product } from '../types';
-import { Line, Pie } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend } from 'chart.js';
-import Papa from 'papaparse';
-import { Tab } from '@headlessui/react';
+import React from "react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Package,
+  DollarSign,
+  Users,
+  ShoppingBag,
+  Download,
+  AlertTriangle,
+  Bell,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+} from "lucide-react";
+import { supabase } from "../lib/supabase";
+import { useStore } from "../store/useStore";
+import toast from "react-hot-toast";
+import type { Product } from "../types";
+import { Line, Pie } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import Papa from "papaparse";
+import { Tab } from "@headlessui/react";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Tooltip,
+  Legend
+);
 
 const Admin = () => {
   const { user } = useStore();
@@ -23,19 +54,26 @@ const Admin = () => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<string | null>(null);
-  const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
-  const [selectedProductIds, setSelectedProductIds] = React.useState<string[]>([]);
+  const [deleteType, setDeleteType] = React.useState<
+    "product" | "bulk" | "user" | "order" | null
+  >(null);
+  const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(
+    null
+  );
+  const [selectedProductIds, setSelectedProductIds] = React.useState<string[]>(
+    []
+  );
   const [showLowStockOnly, setShowLowStockOnly] = React.useState(false);
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = React.useState("");
   const [formData, setFormData] = React.useState({
-    name: '',
-    description: '',
-    price: '',
-    category: 'men',
-    images: [''],
-    sizes: [''],
-    colors: [''],
-    stock: '',
+    name: "",
+    description: "",
+    price: "",
+    category: "men",
+    images: [""],
+    sizes: [""],
+    colors: [""],
+    stock: "",
   });
   const [uploadedImages, setUploadedImages] = React.useState<string[]>([]);
   const [stats, setStats] = React.useState({
@@ -45,72 +83,82 @@ const Admin = () => {
     totalRevenue: 0,
   });
   const [darkMode, setDarkMode] = React.useState(false);
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const productsPerPage = 15;
+  const [currentProductPage, setCurrentProductPage] = React.useState(1);
+  const [currentOrderPage, setCurrentOrderPage] = React.useState(1);
+  const [currentUserPage, setCurrentUserPage] = React.useState(1);
+  const itemsPerPage = 10;
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [salesData, setSalesData] = React.useState({
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+    labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     data: [30, 45, 60, 70, 55, 80],
   });
   const [categoryData, setCategoryData] = React.useState({
-    labels: ['Men', 'Women', 'Accessories'],
+    labels: ["Men", "Women", "Accessories"],
     data: [40, 35, 25],
   });
 
   React.useEffect(() => {
-    const savedMode = localStorage.getItem('darkMode');
+    const savedMode = localStorage.getItem("darkMode");
     const isDarkMode = savedMode ? JSON.parse(savedMode) : false;
     setDarkMode(isDarkMode);
     if (isDarkMode) {
-      document.documentElement.classList.add('dark');
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove("dark");
     }
 
     fetchProducts();
     fetchStats();
     fetchOrders();
     fetchUsers();
-    setupRealtimeSubscriptions();
+    const subscription = setupRealtimeSubscriptions();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
   }, []);
 
   React.useEffect(() => {
-    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+    localStorage.setItem("darkMode", JSON.stringify(darkMode));
     if (darkMode) {
-      document.documentElement.classList.add('dark');
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove("dark");
     }
   }, [darkMode]);
 
   React.useEffect(() => {
-    const filtered = products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            product.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const filtered = products.filter((product) => {
+      const matchesSearch =
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStock = showLowStockOnly ? product.stock < 10 : true;
       return matchesSearch && matchesStock;
     });
     setFilteredProducts(filtered);
-    setCurrentPage(1);
+    setCurrentProductPage(1);
   }, [products, searchQuery, showLowStockOnly]);
 
   const fetchProducts = async () => {
     try {
       const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       if (data) {
         setProducts(data);
         setFilteredProducts(data);
-        const lowStockProducts = data.filter(product => product.stock < 10);
+        const lowStockProducts = data.filter((product) => product.stock < 10);
         if (lowStockProducts.length > 0) {
-          toast.error(`Low stock alert: ${lowStockProducts.length} products have stock below 10!`, {
-            icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
-          });
+          toast.error(
+            `Low stock alert: ${lowStockProducts.length} products have stock below 10!`,
+            {
+              icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
+            }
+          );
         }
       }
     } catch (error: any) {
@@ -122,18 +170,20 @@ const Admin = () => {
 
   const fetchStats = async () => {
     try {
-      const { data: totalUsers } = await supabase.rpc('get_total_users');
-      const { data: totalValue } = await supabase.rpc('get_total_inventory_value');
+      const { data: totalUsers } = await supabase.rpc("get_total_users");
+      const { data: totalValue } = await supabase.rpc(
+        "get_total_inventory_value"
+      );
 
-      // Fetch all orders to calculate totalOrders and totalRevenue
       const { data: ordersData, error: ordersError } = await supabase
-        .from('orders')
-        .select('total');
+        .from("orders")
+        .select("total");
 
       if (ordersError) throw ordersError;
 
-      const totalOrders = ordersData.length; // Calculate total orders directly
-      const totalRevenue = ordersData?.reduce((sum, order) => sum + order.total, 0) || 0;
+      const totalOrders = ordersData.length;
+      const totalRevenue =
+        ordersData?.reduce((sum, order) => sum + order.total, 0) || 0;
 
       setStats({
         totalUsers: totalUsers || 0,
@@ -142,137 +192,186 @@ const Admin = () => {
         totalValue: totalValue || 0,
       });
     } catch (error: any) {
-      console.error('Error fetching stats:', error);
+      console.error("Error fetching stats:", error);
     }
   };
 
   const fetchOrders = async () => {
     try {
-      // Fetch all orders and join with user_profiles to get full_name
       const { data: ordersData, error: ordersError } = await supabase
-        .from('orders')
-        .select('*, user:user_profiles!user_id(full_name)')
-        .order('created_at', { ascending: false });
+        .from("orders")
+        .select("*, user:user_profiles!user_id(full_name)")
+        .order("created_at", { ascending: false });
 
       if (ordersError) throw ordersError;
 
-      // Log the fetched orders for debugging
-      console.log('Fetched orders:', ordersData);
+      console.log("Fetched orders:", ordersData);
 
-      // Map the orders with user names
-      const ordersWithUserNames = ordersData.map(order => ({
+      if (!ordersData) {
+        setOrders([]);
+        setStats((prev) => ({ ...prev, totalOrders: 0, totalRevenue: 0 }));
+        return;
+      }
+
+      const ordersWithUserNames = ordersData.map((order) => ({
         ...order,
-        user_name: order.user?.full_name || 'Unknown User',
+        user_name: order.user?.full_name || "Unknown User",
       }));
 
-      setOrders(ordersWithUserNames);
+      const totalRevenue =
+        ordersWithUserNames.reduce((sum, order) => sum + order.total, 0) || 0;
+      const totalOrders = ordersWithUserNames.length;
 
-      // Recalculate totalRevenue based on all fetched orders
-      const totalRevenue = ordersWithUserNames.reduce((sum, order) => sum + order.total, 0) || 0;
-      setStats(prev => ({ ...prev, totalRevenue }));
+      setOrders(ordersWithUserNames);
+      setStats((prev) => ({
+        ...prev,
+        totalOrders: totalOrders,
+        totalRevenue: totalRevenue,
+      }));
     } catch (error: any) {
-      toast.error('Failed to fetch orders: ' + error.message);
-      console.error('Error fetching orders:', error);
+      toast.error("Failed to fetch orders: " + error.message);
+      console.error("Error fetching orders:", error);
+      setOrders([]);
     }
   };
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.rpc('get_all_users');
+      const { data, error } = await supabase.rpc("get_all_users");
 
       if (error) {
-        console.error('Error fetching users:', error.message, error.details, error.hint);
+        console.error(
+          "Error fetching users:",
+          error.message,
+          error.details,
+          error.hint
+        );
         throw error;
       }
       if (data) {
-        console.log('Fetched users:', data);
+        console.log("Fetched users:", data);
         setUsers(data);
       } else {
-        console.warn('No user data returned from get_all_users');
+        console.warn("No user data returned from get_all_users");
         setUsers([]);
       }
     } catch (error: any) {
-      toast.error('Failed to fetch users: ' + error.message);
-      console.error('Error fetching users:', error);
+      toast.error("Failed to fetch users: " + error.message);
+      console.error("Error fetching users:", error);
       setUsers([]);
     }
   };
 
   const setupRealtimeSubscriptions = () => {
-    supabase
-      .channel('orders')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, async (payload) => {
-        toast.success('New order placed!', {
-          icon: <Bell className="h-5 w-5 text-green-500" />,
-        });
+    const channel = supabase
+      .channel("orders")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "orders" },
+        async (payload) => {
+          toast.success("New order placed!", {
+            icon: <Bell className="h-5 w-5 text-green-500" />,
+          });
 
-        // Fetch the user data for the new order from user_profiles
-        const { data: userData, error: userError } = await supabase
-          .from('user_profiles')
-          .select('full_name')
-          .eq('id', payload.new.user_id)
-          .single();
+          const { data: userData, error: userError } = await supabase
+            .from("user_profiles")
+            .select("full_name")
+            .eq("id", payload.new.user_id)
+            .single();
 
-        if (userError) {
-          console.error('Error fetching user for new order:', userError.message);
+          if (userError) {
+            console.error(
+              "Error fetching user for new order:",
+              userError.message
+            );
+          }
+
+          const userName = userData?.full_name || "Unknown User";
+
+          const newOrder = {
+            ...payload.new,
+            user_name: userName,
+          };
+
+          setOrders((prev) => [newOrder, ...prev]);
+          setStats((prev) => ({
+            ...prev,
+            totalOrders: prev.totalOrders + 1,
+            totalRevenue: prev.totalRevenue + payload.new.total,
+          }));
         }
-
-        const userName = userData?.full_name || 'Unknown User';
-
-        const newOrder = {
-          ...payload.new,
-          user_name: userName,
-        };
-
-        setOrders((prev) => [newOrder, ...prev]);
-        setStats((prev) => ({
-          ...prev,
-          totalOrders: prev.totalOrders + 1,
-          totalRevenue: prev.totalRevenue + payload.new.total,
-        }));
-      })
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders" },
+        (payload) => {
+          console.log("Order updated in database:", payload);
+          fetchOrders();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "orders" },
+        (payload) => {
+          console.log("Order deleted from database:", payload);
+          fetchOrders();
+        }
+      )
       .subscribe();
+
+    return channel;
   };
 
   const handleImageUpload = async (file: File) => {
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${Math.random()}.${fileExt}`;
       const filePath = `product-images/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('products')
+        .from("products")
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('products')
-        .getPublicUrl(filePath);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("products").getPublicUrl(filePath);
 
-      if (!publicUrl) throw new Error('Failed to get public URL');
+      if (!publicUrl) throw new Error("Failed to get public URL");
 
       return publicUrl;
     } catch (error: any) {
-      toast.error('Failed to upload image');
-      console.error('Error uploading image:', error);
+      toast.error("Failed to upload image");
+      console.error("Error uploading image:", error);
       return null;
     }
   };
 
   const formatCurrency = (value: number) => {
-    return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${value.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   const formatShippingAddress = (address: any) => {
-    if (!address || typeof address !== 'object') return 'N/A';
-    const { street, city, state, zip } = address;
-    return `${street || ''}${street && (city || state || zip) ? ', ' : ''}${city || ''}${city && (state || zip) ? ', ' : ''}${state || ''}${state && zip ? ' ' : ''}${zip || ''}`.trim() || 'N/A';
+    if (!address || typeof address !== "object") return "N/A";
+    const { street, city, state, zip, country } = address;
+    return (
+      `${street || ""}${
+        street && (city || state || zip || country) ? ", " : ""
+      }${city || ""}${city && (state || zip || country) ? ", " : ""}${
+        state || ""
+      }${state && (zip || country) ? " " : ""}${zip || ""}${
+        zip && country ? ", " : ""
+      }${country || ""}`.trim() || "N/A"
+    );
   };
 
   const formatItemsSummary = (items: any) => {
-    if (!Array.isArray(items) || items.length === 0) return 'No items';
-    return `${items.length} item${items.length !== 1 ? 's' : ''}`;
+    if (!Array.isArray(items) || items.length === 0) return "No items";
+    return `${items.length} item${items.length !== 1 ? "s" : ""}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -285,17 +384,21 @@ const Admin = () => {
 
       const fileInput = fileInputRef.current;
       if (fileInput && fileInput.files && fileInput.files.length > 0) {
-        const uploadPromises = Array.from(fileInput.files).map(handleImageUpload);
+        const uploadPromises = Array.from(fileInput.files).map(
+          handleImageUpload
+        );
         const uploadedUrls = await Promise.all(uploadPromises);
         const newUploadedUrls = uploadedUrls.filter(Boolean) as string[];
         imageUrls = [...imageUrls, ...newUploadedUrls];
       }
 
-      const manualUrls = formData.images.filter(url => url.trim() !== '');
+      const manualUrls = formData.images.filter((url) => url.trim() !== "");
       imageUrls = [...imageUrls, ...manualUrls];
 
       if (imageUrls.length === 0) {
-        toast.error('Please provide at least one image (upload a file or enter a URL)');
+        toast.error(
+          "Please provide at least one image (upload a file or enter a URL)"
+        );
         return;
       }
 
@@ -304,33 +407,41 @@ const Admin = () => {
         price: parseFloat(formData.price),
         stock: parseInt(formData.stock),
         images: imageUrls,
-        sizes: formData.sizes.filter(size => size.trim() !== ''),
-        colors: formData.colors.filter(color => color.trim() !== ''),
+        sizes: formData.sizes.filter((size) => size.trim() !== ""),
+        colors: formData.colors.filter((color) => color.trim() !== ""),
       };
 
       if (selectedProduct) {
         const { error } = await supabase
-          .from('products')
+          .from("products")
           .update(productData)
-          .eq('id', selectedProduct.id);
+          .eq("id", selectedProduct.id);
 
         if (error) throw error;
 
         const { data: updatedProduct } = await supabase
-          .from('products')
-          .select('*')
-          .eq('id', selectedProduct.id)
+          .from("products")
+          .select("*")
+          .eq("id", selectedProduct.id)
           .single();
 
         if (updatedProduct) {
-          setProducts(products.map(p => p.id === selectedProduct.id ? updatedProduct : p));
-          setFilteredProducts(filteredProducts.map(p => p.id === selectedProduct.id ? updatedProduct : p));
+          setProducts(
+            products.map((p) =>
+              p.id === selectedProduct.id ? updatedProduct : p
+            )
+          );
+          setFilteredProducts(
+            filteredProducts.map((p) =>
+              p.id === selectedProduct.id ? updatedProduct : p
+            )
+          );
         }
 
-        toast.success('Product updated successfully');
+        toast.success("Product updated successfully");
       } else {
         const { data, error } = await supabase
-          .from('products')
+          .from("products")
           .insert([productData])
           .select();
 
@@ -339,24 +450,24 @@ const Admin = () => {
           setProducts([data[0], ...products]);
           setFilteredProducts([data[0], ...filteredProducts]);
         }
-        toast.success('Product added successfully');
+        toast.success("Product added successfully");
       }
 
       setIsModalOpen(false);
       setSelectedProduct(null);
       setFormData({
-        name: '',
-        description: '',
-        price: '',
-        category: 'men',
-        images: [''],
-        sizes: [''],
-        colors: [''],
-        stock: '',
+        name: "",
+        description: "",
+        price: "",
+        category: "men",
+        images: [""],
+        sizes: [""],
+        colors: [""],
+        stock: "",
       });
       setUploadedImages([]);
       if (fileInput) {
-        fileInput.value = '';
+        fileInput.value = "";
       }
     } catch (error: any) {
       toast.error(error.message);
@@ -365,17 +476,21 @@ const Admin = () => {
 
   const handleEdit = (product: Product) => {
     setSelectedProduct(product);
-    const uploaded = product.images.filter(img => img.includes('product-images'));
-    const manualUrls = product.images.filter(img => !img.includes('product-images'));
+    const uploaded = product.images.filter((img) =>
+      img.includes("product-images")
+    );
+    const manualUrls = product.images.filter(
+      (img) => !img.includes("product-images")
+    );
     setUploadedImages(uploaded);
     setFormData({
       name: product.name,
       description: product.description,
       price: product.price.toString(),
       category: product.category,
-      images: [...manualUrls, ''],
-      sizes: [...product.sizes, ''],
-      colors: [...product.colors, ''],
+      images: [...manualUrls, ""],
+      sizes: [...product.sizes, ""],
+      colors: [...product.colors, ""],
       stock: product.stock.toString(),
     });
     setIsModalOpen(true);
@@ -383,6 +498,7 @@ const Admin = () => {
 
   const handleDelete = (id: string) => {
     setDeleteTarget(id);
+    setDeleteType("product");
     setIsDeleteModalOpen(true);
   };
 
@@ -391,49 +507,58 @@ const Admin = () => {
 
     try {
       const { error } = await supabase
-        .from('products')
+        .from("products")
         .delete()
-        .eq('id', deleteTarget);
+        .eq("id", deleteTarget);
 
       if (error) throw error;
-      setProducts(products.filter(p => p.id !== deleteTarget));
-      setFilteredProducts(filteredProducts.filter(p => p.id !== deleteTarget));
-      toast.success('Product deleted successfully');
+      setProducts(products.filter((p) => p.id !== deleteTarget));
+      setFilteredProducts(
+        filteredProducts.filter((p) => p.id !== deleteTarget)
+      );
+      toast.success("Product deleted successfully");
     } catch (error: any) {
       toast.error(error.message);
     } finally {
       setIsDeleteModalOpen(false);
       setDeleteTarget(null);
+      setDeleteType(null);
     }
   };
 
   const handleBulkDelete = async () => {
     if (selectedProductIds.length === 0) return;
+    setDeleteType("bulk");
     setIsDeleteModalOpen(true);
   };
 
   const confirmBulkDelete = async () => {
     try {
       const { error } = await supabase
-        .from('products')
+        .from("products")
         .delete()
-        .in('id', selectedProductIds);
+        .in("id", selectedProductIds);
 
       if (error) throw error;
-      setProducts(products.filter(p => !selectedProductIds.includes(p.id)));
-      setFilteredProducts(filteredProducts.filter(p => !selectedProductIds.includes(p.id)));
-      toast.success(`${selectedProductIds.length} product(s) deleted successfully`);
+      setProducts(products.filter((p) => !selectedProductIds.includes(p.id)));
+      setFilteredProducts(
+        filteredProducts.filter((p) => !selectedProductIds.includes(p.id))
+      );
+      toast.success(
+        `${selectedProductIds.length} product(s) deleted successfully`
+      );
     } catch (error: any) {
       toast.error(error.message);
     } finally {
       setSelectedProductIds([]);
       setIsDeleteModalOpen(false);
+      setDeleteType(null);
     }
   };
 
   const handleSelectProduct = (id: string) => {
-    setSelectedProductIds(prev =>
-      prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
+    setSelectedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((pid) => pid !== id) : [...prev, id]
     );
   };
 
@@ -441,22 +566,79 @@ const Admin = () => {
     if (selectedProductIds.length === currentProducts.length) {
       setSelectedProductIds([]);
     } else {
-      setSelectedProductIds(currentProducts.map(product => product.id));
+      setSelectedProductIds(currentProducts.map((product) => product.id));
     }
   };
 
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case "shipped":
+        return "text-green-600";
+      case "canceled":
+        return "text-red-600";
+      default:
+        return "text-gray-600";
+    }
+  };
+
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    newStatus: string
+  ) => {
     try {
-      const { error } = await supabase
-        .from('orders')
+      const { data, error } = await supabase
+        .from("orders")
         .update({ status: newStatus })
-        .eq('id', orderId);
+        .eq("id", orderId)
+        .select()
+        .single();
 
       if (error) throw error;
+
+      console.log("Order status updated in database:", {
+        orderId,
+        newStatus,
+        data,
+      });
+
+      await fetchOrders();
+
       toast.success(`Order status updated to ${newStatus}`);
-      fetchOrders();
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error("Failed to update order status: " + error.message);
+      console.error("Error updating order status:", error);
+    }
+  };
+
+  const handleDeleteOrder = (orderId: string) => {
+    setDeleteTarget(orderId);
+    setDeleteType("order");
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (!deleteTarget) return;
+
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .delete()
+        .eq("id", deleteTarget);
+
+      if (error) throw error;
+
+      console.log("Order deleted from database:", { orderId: deleteTarget });
+
+      await fetchOrders();
+
+      toast.success("Order deleted successfully");
+    } catch (error: any) {
+      toast.error("Failed to delete order: " + error.message);
+      console.error("Error deleting order:", error);
+    } finally {
+      setIsDeleteModalOpen(false);
+      setDeleteTarget(null);
+      setDeleteType(null);
     }
   };
 
@@ -476,6 +658,7 @@ const Admin = () => {
 
   const handleDeleteUser = async (userId: string) => {
     setDeleteTarget(userId);
+    setDeleteType("user");
     setIsDeleteModalOpen(true);
   };
 
@@ -486,44 +669,75 @@ const Admin = () => {
       const { error } = await supabase.auth.admin.deleteUser(deleteTarget);
 
       if (error) throw error;
-      toast.success('User deleted successfully');
+      toast.success("User deleted successfully");
       fetchUsers();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
       setIsDeleteModalOpen(false);
       setDeleteTarget(null);
+      setDeleteType(null);
     }
   };
 
   const exportToCSV = (data: any[], filename: string) => {
     const csv = Papa.unparse(data);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
-    link.setAttribute('download', filename);
+    link.setAttribute("download", filename);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const indexOfLastProduct = currentPage * productsPerPage;
-  const indexOfFirstProduct = indexOfLastProduct - productsPerPage;
-  const currentProducts = filteredProducts.slice(indexOfFirstProduct, indexOfLastProduct);
-  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+  // Pagination for Products
+  const indexOfLastProduct = currentProductPage * itemsPerPage;
+  const indexOfFirstProduct = indexOfLastProduct - itemsPerPage;
+  const currentProducts = filteredProducts.slice(
+    indexOfFirstProduct,
+    indexOfLastProduct
+  );
+  const totalProductPages = Math.ceil(filteredProducts.length / itemsPerPage);
 
-  const handlePageChange = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleProductPageChange = (pageNumber: number) => {
+    setCurrentProductPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (!user || user.user_metadata?.role !== 'admin') {
+  // Pagination for Orders
+  const indexOfLastOrder = currentOrderPage * itemsPerPage;
+  const indexOfFirstOrder = indexOfLastOrder - itemsPerPage;
+  const currentOrders = orders.slice(indexOfFirstOrder, indexOfLastOrder);
+  const totalOrderPages = Math.ceil(orders.length / itemsPerPage);
+
+  const handleOrderPageChange = (pageNumber: number) => {
+    setCurrentOrderPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Pagination for Users
+  const indexOfLastUser = currentUserPage * itemsPerPage;
+  const indexOfFirstUser = indexOfLastUser - itemsPerPage;
+  const currentUsers = users.slice(indexOfFirstUser, indexOfLastUser);
+  const totalUserPages = Math.ceil(users.length / itemsPerPage);
+
+  const handleUserPageChange = (pageNumber: number) => {
+    setCurrentUserPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  if (!user || user.user_metadata?.role !== "admin") {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
-          <p className="text-gray-600 dark:text-gray-400">You don't have permission to access this page.</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Access Denied
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            You don't have permission to access this page.
+          </p>
         </div>
       </div>
     );
@@ -533,13 +747,15 @@ const Admin = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-display font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
+          <h1 className="text-3xl font-display font-bold text-gray-900 dark:text-white">
+            Admin Dashboard
+          </h1>
           <div className="flex gap-4">
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md"
             >
-              Toggle {darkMode ? 'Light' : 'Dark'} Mode
+              Toggle {darkMode ? "Light" : "Dark"} Mode
             </button>
             <motion.button
               whileHover={{ scale: 1.02 }}
@@ -547,14 +763,14 @@ const Admin = () => {
               onClick={() => {
                 setSelectedProduct(null);
                 setFormData({
-                  name: '',
-                  description: '',
-                  price: '',
-                  category: 'men',
-                  images: [''],
-                  sizes: [''],
-                  colors: [''],
-                  stock: '',
+                  name: "",
+                  description: "",
+                  price: "",
+                  category: "men",
+                  images: [""],
+                  sizes: [""],
+                  colors: [""],
+                  stock: "",
                 });
                 setUploadedImages([]);
                 setIsModalOpen(true);
@@ -572,8 +788,12 @@ const Admin = () => {
             <div className="flex items-center gap-4">
               <Package className="h-8 w-8 text-primary-600" />
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Products</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{products.length}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Total Products
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {products.length}
+                </p>
               </div>
             </div>
           </div>
@@ -581,8 +801,12 @@ const Admin = () => {
             <div className="flex items-center gap-4">
               <Package className="h-8 w-8 text-primary-600" />
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Orders</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalOrders}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Total Orders
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {stats.totalOrders}
+                </p>
               </div>
             </div>
           </div>
@@ -590,8 +814,12 @@ const Admin = () => {
             <div className="flex items-center gap-4">
               <Users className="h-8 w-8 text-primary-600" />
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Users</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.totalUsers}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Total Users
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {stats.totalUsers}
+                </p>
               </div>
             </div>
           </div>
@@ -599,8 +827,12 @@ const Admin = () => {
             <div className="flex items-center gap-4">
               <ShoppingBag className="h-8 w-8 text-primary-600" />
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Value</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.totalValue)}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Total Value
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(stats.totalValue)}
+                </p>
               </div>
             </div>
           </div>
@@ -608,8 +840,12 @@ const Admin = () => {
             <div className="flex items-center gap-4">
               <DollarSign className="h-8 w-8 text-primary-600" />
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.totalRevenue)}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Total Revenue
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(stats.totalRevenue)}
+                </p>
               </div>
             </div>
           </div>
@@ -620,10 +856,11 @@ const Admin = () => {
             <Tab
               className={({ selected }) =>
                 `w-full rounded-lg py-2.5 text-sm font-medium leading-5
-                 ${selected
-                  ? 'bg-primary-600 text-white shadow'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                }`
+                 ${
+                   selected
+                     ? "bg-primary-600 text-white shadow"
+                     : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
+                 }`
               }
             >
               Products
@@ -631,10 +868,11 @@ const Admin = () => {
             <Tab
               className={({ selected }) =>
                 `w-full rounded-lg py-2.5 text-sm font-medium leading-5
-                 ${selected
-                  ? 'bg-primary-600 text-white shadow'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                }`
+                 ${
+                   selected
+                     ? "bg-primary-600 text-white shadow"
+                     : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
+                 }`
               }
             >
               Orders
@@ -642,10 +880,11 @@ const Admin = () => {
             <Tab
               className={({ selected }) =>
                 `w-full rounded-lg py-2.5 text-sm font-medium leading-5
-                 ${selected
-                  ? 'bg-primary-600 text-white shadow'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                }`
+                 ${
+                   selected
+                     ? "bg-primary-600 text-white shadow"
+                     : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
+                 }`
               }
             >
               Users
@@ -653,10 +892,11 @@ const Admin = () => {
             <Tab
               className={({ selected }) =>
                 `w-full rounded-lg py-2.5 text-sm font-medium leading-5
-                 ${selected
-                  ? 'bg-primary-600 text-white shadow'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
-                }`
+                 ${
+                   selected
+                     ? "bg-primary-600 text-white shadow"
+                     : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600"
+                 }`
               }
             >
               Analytics
@@ -667,16 +907,22 @@ const Admin = () => {
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-display font-bold text-gray-900 dark:text-white">Products</h2>
+                    <h2 className="text-xl font-display font-bold text-gray-900 dark:text-white">
+                      Products
+                    </h2>
                     <div className="flex gap-4 items-center">
                       <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={showLowStockOnly}
-                          onChange={() => setShowLowStockOnly(!showLowStockOnly)}
+                          onChange={() =>
+                            setShowLowStockOnly(!showLowStockOnly)
+                          }
                           className="h-4 w-4 text-primary-600 rounded"
                         />
-                        <label className="text-sm text-gray-700 dark:text-gray-300">Show Low Stock Only</label>
+                        <label className="text-sm text-gray-700 dark:text-gray-300">
+                          Show Low Stock Only
+                        </label>
                       </div>
                       <div className="relative">
                         <input
@@ -689,7 +935,9 @@ const Admin = () => {
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                       </div>
                       <button
-                        onClick={() => exportToCSV(filteredProducts, 'products.csv')}
+                        onClick={() =>
+                          exportToCSV(filteredProducts, "products.csv")
+                        }
                         className="flex items-center gap-2 text-primary-600 hover:text-primary-700"
                       >
                         <Download className="h-5 w-5" />
@@ -714,7 +962,11 @@ const Admin = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           <input
                             type="checkbox"
-                            checked={selectedProductIds.length === currentProducts.length && currentProducts.length > 0}
+                            checked={
+                              selectedProductIds.length ===
+                                currentProducts.length &&
+                              currentProducts.length > 0
+                            }
                             onChange={handleSelectAll}
                             className="h-4 w-4 text-primary-600 rounded"
                           />
@@ -739,23 +991,38 @@ const Admin = () => {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                       {loading ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-4 text-center text-gray-500 dark:text-gray-300">
+                          <td
+                            colSpan={6}
+                            className="px-6 py-4 text-center text-gray-500 dark:text-gray-300"
+                          >
                             Loading...
                           </td>
                         </tr>
                       ) : currentProducts.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-4 text-center text-gray-500 dark:text-gray-300">
+                          <td
+                            colSpan={6}
+                            className="px-6 py-4 text-center text-gray-500 dark:text-gray-300"
+                          >
                             No products found
                           </td>
                         </tr>
                       ) : (
                         currentProducts.map((product) => (
-                          <tr key={product.id} className={product.stock < 10 ? 'bg-red-50 dark:bg-red-900' : ''}>
+                          <tr
+                            key={product.id}
+                            className={
+                              product.stock < 10
+                                ? "bg-red-50 dark:bg-red-900"
+                                : ""
+                            }
+                          >
                             <td className="px-6 py-4">
                               <input
                                 type="checkbox"
-                                checked={selectedProductIds.includes(product.id)}
+                                checked={selectedProductIds.includes(
+                                  product.id
+                                )}
                                 onChange={() => handleSelectProduct(product.id)}
                                 className="h-4 w-4 text-primary-600 rounded"
                               />
@@ -813,22 +1080,26 @@ const Admin = () => {
                     </tbody>
                   </table>
                 </div>
-                {filteredProducts.length > productsPerPage && (
+                {filteredProducts.length > itemsPerPage && (
                   <div className="flex justify-between items-center p-4">
                     <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
+                      onClick={() =>
+                        handleProductPageChange(currentProductPage - 1)
+                      }
+                      disabled={currentProductPage === 1}
                       className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md flex items-center gap-2 disabled:opacity-50"
                     >
                       <ChevronLeft className="h-5 w-5" />
                       Previous
                     </button>
                     <span className="text-gray-900 dark:text-white">
-                      Page {currentPage} of {totalPages}
+                      Page {currentProductPage} of {totalProductPages}
                     </span>
                     <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
+                      onClick={() =>
+                        handleProductPageChange(currentProductPage + 1)
+                      }
+                      disabled={currentProductPage === totalProductPages}
                       className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md flex items-center gap-2 disabled:opacity-50"
                     >
                       Next
@@ -841,9 +1112,11 @@ const Admin = () => {
             <Tab.Panel>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                 <div className="flex justify-between items-center p-6">
-                  <h2 className="text-xl font-display font-bold text-gray-900 dark:text-white">Recent Orders</h2>
+                  <h2 className="text-xl font-display font-bold text-gray-900 dark:text-white">
+                    Recent Orders
+                  </h2>
                   <button
-                    onClick={() => exportToCSV(orders, 'orders.csv')}
+                    onClick={() => exportToCSV(orders, "orders.csv")}
                     className="flex items-center gap-2 text-primary-600 hover:text-primary-700"
                   >
                     <Download className="h-5 w-5" />
@@ -881,53 +1154,139 @@ const Admin = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {orders.map((order) => (
-                        <tr key={order.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                            <Link
-                              to={`/admin/orders/${order.id}`}
-                              className="text-primary-600 hover:text-primary-900 underline"
-                            >
-                              {order.id}
-                            </Link>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{order.user_name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{formatItemsSummary(order.items)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{formatCurrency(order.total)}</td>
-                          <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{order.status}</td>
-                          <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">{formatShippingAddress(order.shipping_address)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                            {new Date(order.created_at).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button
-                              onClick={() => handleUpdateOrderStatus(order.id, 'shipped')}
-                              className="text-primary-600 hover:text-primary-900 mr-4"
-                              disabled={order.status === 'shipped' || order.status === 'canceled'}
-                            >
-                              Mark as Shipped
-                            </button>
-                            <button
-                              onClick={() => handleUpdateOrderStatus(order.id, 'canceled')}
-                              className="text-red-600 hover:text-red-900"
-                              disabled={order.status === 'shipped' || order.status === 'canceled'}
-                            >
-                              Cancel Order
-                            </button>
+                      {orders.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="px-6 py-4 text-center text-gray-500 dark:text-gray-300"
+                          >
+                            No orders found
                           </td>
                         </tr>
-                      ))}
+                      ) : currentOrders.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="px-6 py-4 text-center text-gray-500 dark:text-gray-300"
+                          >
+                            No orders on this page
+                          </td>
+                        </tr>
+                      ) : (
+                        currentOrders.map((order) => (
+                          <tr key={order.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              <Link
+                                to={`/admin/orders/${order.id}`}
+                                className="text-primary-600 hover:text-primary-900 underline"
+                              >
+                                {order.id}
+                              </Link>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {order.user_name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {formatItemsSummary(order.items)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {formatCurrency(order.total)}
+                            </td>
+                            <td
+                              className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${getStatusClass(
+                                order.status
+                              )}`}
+                            >
+                              {order.status}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
+                              {formatShippingAddress(order.shipping_address)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {new Date(order.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex flex-col items-start space-y-1">
+                                {order.status !== "shipped" &&
+                                  order.status !== "canceled" && (
+                                    <button
+                                      onClick={() =>
+                                        handleUpdateOrderStatus(
+                                          order.id,
+                                          "shipped"
+                                        )
+                                      }
+                                      className="text-blue-600 hover:text-blue-900 text-xs"
+                                    >
+                                      Mark as Shipped
+                                    </button>
+                                  )}
+                                {order.status !== "canceled" &&
+                                  order.status !== "shipped" && (
+                                    <button
+                                      onClick={() =>
+                                        handleUpdateOrderStatus(
+                                          order.id,
+                                          "canceled"
+                                        )
+                                      }
+                                      className="text-red-600 hover:text-red-900 text-xs"
+                                    >
+                                      Cancel Order
+                                    </button>
+                                  )}
+                                <button
+                                  onClick={() => handleDeleteOrder(order.id)}
+                                  className="text-gray-600 dark:text-gray-400 hover:text-red-600 text-xs"
+                                  title="Delete Order"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
+                {orders.length > itemsPerPage && (
+                  <div className="flex justify-between items-center p-4">
+                    <button
+                      onClick={() =>
+                        handleOrderPageChange(currentOrderPage - 1)
+                      }
+                      disabled={currentOrderPage === 1}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                      Previous
+                    </button>
+                    <span className="text-gray-900 dark:text-white">
+                      Page {currentOrderPage} of {totalOrderPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        handleOrderPageChange(currentOrderPage + 1)
+                      }
+                      disabled={currentOrderPage === totalOrderPages}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md flex items-center gap-2 disabled:opacity-50"
+                    >
+                      Next
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
               </div>
             </Tab.Panel>
             <Tab.Panel>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                 <div className="flex justify-between items-center p-6">
-                  <h2 className="text-xl font-display font-bold text-gray-900 dark:text-white">User Management</h2>
+                  <h2 className="text-xl font-display font-bold text-gray-900 dark:text-white">
+                    User Management
+                  </h2>
                   <button
-                    onClick={() => exportToCSV(users, 'users.csv')}
+                    onClick={() => exportToCSV(users, "users.csv")}
                     className="flex items-center gap-2 text-primary-600 hover:text-primary-700"
                   >
                     <Download className="h-5 w-5" />
@@ -936,71 +1295,115 @@ const Admin = () => {
                 </div>
                 {users.length === 0 ? (
                   <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                    No users found. Check the console for errors or verify the 'get_all_users' RPC function in Supabase.
+                    No users found. Check the console for errors or verify the
+                    'get_all_users' RPC function in Supabase.
+                  </div>
+                ) : currentUsers.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                    No users on this page
                   </div>
                 ) : (
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Email
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Role
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Registered
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {users.map((user) => (
-                        <tr key={user.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{user.email || 'N/A'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{user.role || 'N/A'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                            {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <select
-                              value={user.role || 'user'}
-                              onChange={(e) => handleUpdateUserRole(user.id, e.target.value)}
-                              className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            >
-                              <option value="user">User</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                            <button
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="text-red-600 hover:text-red-900 ml-4"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </button>
-                          </td>
+                  <>
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Email
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Role
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Registered
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Actions
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {currentUsers.map((user) => (
+                          <tr key={user.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {user.email || "N/A"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {user.role || "N/A"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                              {user.created_at
+                                ? new Date(user.created_at).toLocaleDateString()
+                                : "N/A"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <select
+                                value={user.role || "user"}
+                                onChange={(e) =>
+                                  handleUpdateUserRole(user.id, e.target.value)
+                                }
+                                className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              >
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                              <button
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="text-red-600 hover:text-red-900 ml-4"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {users.length > itemsPerPage && (
+                      <div className="flex justify-between items-center p-4">
+                        <button
+                          onClick={() =>
+                            handleUserPageChange(currentUserPage - 1)
+                          }
+                          disabled={currentUserPage === 1}
+                          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md flex items-center gap-2 disabled:opacity-50"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                          Previous
+                        </button>
+                        <span className="text-gray-900 dark:text-white">
+                          Page {currentUserPage} of {totalUserPages}
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleUserPageChange(currentUserPage + 1)
+                          }
+                          disabled={currentUserPage === totalUserPages}
+                          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-md flex items-center gap-2 disabled:opacity-50"
+                        >
+                          Next
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </Tab.Panel>
             <Tab.Panel>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                  <h2 className="text-xl font-display font-bold mb-4 text-gray-900 dark:text-white">Sales Overview</h2>
+                  <h2 className="text-xl font-display font-bold mb-4 text-gray-900 dark:text-white">
+                    Sales Overview
+                  </h2>
                   <div className="h-64">
                     <Line
                       data={{
                         labels: salesData.labels,
                         datasets: [
                           {
-                            label: 'Sales',
+                            label: "Sales",
                             data: salesData.data,
-                            borderColor: 'rgb(79, 70, 229)',
-                            backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                            borderColor: "rgb(79, 70, 229)",
+                            backgroundColor: "rgba(79, 70, 229, 0.2)",
                             fill: true,
                             tension: 0.4,
                           },
@@ -1014,7 +1417,9 @@ const Admin = () => {
                   </div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-                  <h2 className="text-xl font-display font-bold mb-4 text-gray-900 dark:text-white">Sales by Category</h2>
+                  <h2 className="text-xl font-display font-bold mb-4 text-gray-900 dark:text-white">
+                    Sales by Category
+                  </h2>
                   <div className="h-64">
                     <Pie
                       data={{
@@ -1023,9 +1428,9 @@ const Admin = () => {
                           {
                             data: categoryData.data,
                             backgroundColor: [
-                              'rgb(79, 70, 229)',
-                              'rgb(59, 130, 246)',
-                              'rgb(147, 51, 234)',
+                              "rgb(79, 70, 229)",
+                              "rgb(59, 130, 246)",
+                              "rgb(147, 51, 234)",
                             ],
                           },
                         ],
@@ -1051,7 +1456,7 @@ const Admin = () => {
             className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
           >
             <h2 className="text-2xl font-display font-bold mb-6 text-gray-900 dark:text-white">
-              {selectedProduct ? 'Edit Product' : 'Add New Product'}
+              {selectedProduct ? "Edit Product" : "Add New Product"}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
@@ -1062,7 +1467,9 @@ const Admin = () => {
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   className="w-full px-4 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
               </div>
@@ -1074,7 +1481,9 @@ const Admin = () => {
                 <textarea
                   required
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   className="w-full px-4 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={3}
                 />
@@ -1091,7 +1500,9 @@ const Admin = () => {
                     min="0"
                     step="0.01"
                     value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: e.target.value })
+                    }
                     className="w-full px-4 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
@@ -1102,7 +1513,9 @@ const Admin = () => {
                   <select
                     required
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
                     className="w-full px-4 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="men">Men</option>
@@ -1119,7 +1532,9 @@ const Admin = () => {
                 <div className="space-y-2">
                   {uploadedImages.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Uploaded Images:</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                        Uploaded Images:
+                      </p>
                       <div className="flex flex-wrap gap-4">
                         {uploadedImages.map((imageUrl, index) => (
                           <div key={index} className="relative">
@@ -1130,7 +1545,11 @@ const Admin = () => {
                             />
                             <button
                               type="button"
-                              onClick={() => setUploadedImages(uploadedImages.filter((_, i) => i !== index))}
+                              onClick={() =>
+                                setUploadedImages(
+                                  uploadedImages.filter((_, i) => i !== index)
+                                )
+                              }
                               className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1147,7 +1566,9 @@ const Admin = () => {
                     accept="image/*"
                     className="w-full px-4 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Or add image URLs:</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    Or add image URLs:
+                  </p>
                   {formData.images.map((url, index) => (
                     <div key={index} className="flex gap-2 mb-2">
                       <input
@@ -1167,7 +1588,9 @@ const Admin = () => {
                           if (formData.images.length > 1) {
                             setFormData({
                               ...formData,
-                              images: formData.images.filter((_, i) => i !== index),
+                              images: formData.images.filter(
+                                (_, i) => i !== index
+                              ),
                             });
                           }
                         }}
@@ -1178,7 +1601,12 @@ const Admin = () => {
                       {index === formData.images.length - 1 && (
                         <button
                           type="button"
-                          onClick={() => setFormData({ ...formData, images: [...formData.images, ''] })}
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              images: [...formData.images, ""],
+                            })
+                          }
                           className="px-4 py-2 bg-gray-100 dark:bg-gray-600 rounded-md"
                         >
                           +
@@ -1224,7 +1652,12 @@ const Admin = () => {
                     {index === formData.sizes.length - 1 && (
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, sizes: [...formData.sizes, ''] })}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            sizes: [...formData.sizes, ""],
+                          })
+                        }
                         className="px-4 py-2 bg-gray-100 dark:bg-gray-600 rounded-md"
                       >
                         +
@@ -1258,7 +1691,9 @@ const Admin = () => {
                         if (formData.colors.length > 1) {
                           setFormData({
                             ...formData,
-                            colors: formData.colors.filter((_, i) => i !== index),
+                            colors: formData.colors.filter(
+                              (_, i) => i !== index
+                            ),
                           });
                         }
                       }}
@@ -1269,7 +1704,12 @@ const Admin = () => {
                     {index === formData.colors.length - 1 && (
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, colors: [...formData.colors, ''] })}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            colors: [...formData.colors, ""],
+                          })
+                        }
                         className="px-4 py-2 bg-gray-100 dark:bg-gray-600 rounded-md"
                       >
                         +
@@ -1288,7 +1728,9 @@ const Admin = () => {
                   required
                   min="0"
                   value={formData.stock}
-                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, stock: e.target.value })
+                  }
                   className="w-full px-4 py-2 border rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
               </div>
@@ -1311,7 +1753,7 @@ const Admin = () => {
                   type="submit"
                   className="px-4 py-2 bg-primary-600 text-white rounded-md"
                 >
-                  {selectedProduct ? 'Update Product' : 'Add Product'}
+                  {selectedProduct ? "Update Product" : "Add Product"}
                 </motion.button>
               </div>
             </form>
@@ -1330,20 +1772,34 @@ const Admin = () => {
               Confirm Deletion
             </h2>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Are you sure you want to delete {selectedProductIds.length > 0 ? `${selectedProductIds.length} selected products` : 'this item'}?
+              Are you sure you want to delete{" "}
+              {deleteType === "bulk"
+                ? `${selectedProductIds.length} selected products`
+                : deleteType === "order"
+                ? "this order"
+                : deleteType === "user"
+                ? "this user"
+                : "this product"}
+              ?
             </p>
             <div className="flex justify-end gap-4">
               <button
                 onClick={() => {
                   setIsDeleteModalOpen(false);
                   setDeleteTarget(null);
+                  setDeleteType(null);
                 }}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
               >
                 No
               </button>
               <button
-                onClick={selectedProductIds.length > 0 ? confirmBulkDelete : (deleteTarget ? confirmDelete : confirmDeleteUser)}
+                onClick={() => {
+                  if (deleteType === "bulk") confirmBulkDelete();
+                  else if (deleteType === "order") confirmDeleteOrder();
+                  else if (deleteType === "user") confirmDeleteUser();
+                  else confirmDelete();
+                }}
                 className="px-4 py-2 bg-red-600 text-white rounded-md font-semibold"
               >
                 Yes
