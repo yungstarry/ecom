@@ -16,6 +16,7 @@ import ResetPassword from './pages/Auth/ResetPassword';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import Careers from './pages/Careers';
+import OrderDetail from './pages/OrderDetail';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/orders/:orderId" element={<OrderDetail />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />

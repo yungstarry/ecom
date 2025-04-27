@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom'; // Import Link for navigation
 import { motion } from 'framer-motion';
 import { Plus, Edit, Trash2, Package, DollarSign, Users, ShoppingBag, Download, AlertTriangle, Bell, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -147,7 +148,7 @@ const Admin = () => {
 
   const fetchOrders = async () => {
     try {
-      // Fetch all orders and join with user_profile to get full_name
+      // Fetch all orders and join with user_profiles to get full_name
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*, user:user_profiles!user_id(full_name)')
@@ -205,7 +206,7 @@ const Admin = () => {
           icon: <Bell className="h-5 w-5 text-green-500" />,
         });
 
-        // Fetch the user data for the new order from user_profile
+        // Fetch the user data for the new order from user_profiles
         const { data: userData, error: userError } = await supabase
           .from('user_profiles')
           .select('full_name')
@@ -882,11 +883,18 @@ const Admin = () => {
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                       {orders.map((order) => (
                         <tr key={order.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{order.id}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                            <Link
+                              to={`/admin/orders/${order.id}`}
+                              className="text-primary-600 hover:text-primary-900 underline"
+                            >
+                              {order.id}
+                            </Link>
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{order.user_name}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{formatItemsSummary(order.items)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{formatCurrency(order.total)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{order.status}</td>
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{order.status}</td>
                           <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">{formatShippingAddress(order.shipping_address)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                             {new Date(order.created_at).toLocaleDateString()}
